@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>SAIF OSINT · RAIN TERMINAL</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+    <style>
+        /* ===== RESET ===== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #0a0a0a;
+        }
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            color: #00ff00;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* ===== RAIN CANVAS - FULL SCREEN ===== */
+        #rain-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ===== SCANLINES & GLITCH ===== */
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+            background: repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0,255,0,0.015) 2px, rgba(0,255,0,0.015) 4px);
+            opacity: 0.5;
+        }
+        .glitch-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+            background: repeating-linear-gradient(0deg, rgba(0,255,0,0.006) 0px, rgba(0,255,0,0.006) 1px, transparent 1px, transparent 3px);
+            opacity: 0.3;
+            animation: glitch-flicker 0.15s infinite alternate;
+        }
+        @keyframes glitch-flicker { 0% { opacity: 0.2; } 100% { opacity: 0.5; } }
+        .crt-flicker {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            pointer-events: none;
+            background: rgba(0,255,0,0.02);
+            animation: flicker 4s infinite;
+        }
+        @keyframes flicker {
+            0% { opacity: 0; }
+            10% { opacity: 0.04; }
+            20% { opacity: 0; }
+            80% { opacity: 0; }
+            90% { opacity: 0.02; }
+            100% { opacity: 0; }
+        }
+
+        /* ===== TERMINAL - FULL SCREEN ===== */
+        .terminal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 2;
+            background: rgba(6, 12, 6, 0.82);
+            backdrop-filter: blur(6px);
+            border: none;
+            border-radius: 0;
+            padding: 10px 14px 12px;
+            box-shadow: none;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+            display: flex;
+            flex-direction: column;
+        }
+        .terminal::-webkit-scrollbar { width: 4px; }
+        .terminal::-webkit-scrollbar-track { background: rgba(0,255,0,0.01); }
+        .terminal::-webkit-scrollbar-thumb { background: rgba(0,255,0,0.06); border-radius: 10px; }
+
+        /* ===== HEADER ===== */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 4px;
+            border-bottom: 1px solid rgba(0,255,0,0.03);
+            padding-bottom: 5px;
+            margin-bottom: 4px;
+            flex-shrink: 0;
+        }
+        .header .brand {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 900;
+            font-size: clamp(14px, 4vw, 26px);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #00ff00, #00cc44, #00ff00);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: brand-glow 2s infinite;
+        }
+        @keyframes brand-glow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .header .status {
+            font-size: clamp(8px, 1.5vw, 12px);
+            letter-spacing: 2px;
+            color: rgba(0,255,0,0.12);
+            padding: 2px 10px;
+            border: 1px solid rgba(0,255,0,0.03);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .header .status .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #00ff00;
+            border-radius: 50%;
+            animation: dot-pulse 1.2s infinite;
+            box-shadow: 0 0 20px #00ff00;
+        }
+        @keyframes dot-pulse { 0%,100% { opacity:1; } 50% { opacity:0.08; } }
+
+        /* ===== SYSTEM STATUS ===== */
+        .sys-status {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+            font-size: clamp(9px, 1.5vw, 13px);
+            color: rgba(0,255,0,0.06);
+            padding: 2px 0 4px 0;
+            border-bottom: 1px solid rgba(0,255,0,0.015);
+            margin-bottom: 4px;
+            flex-shrink: 0;
+            letter-spacing: 1px;
+        }
+        .sys-status .item { color: rgba(0,255,0,0.08); }
+        .sys-status .item strong { color: rgba(0,255,0,0.12); font-weight: normal; }
+
+        /* ===== SUBHEADER ===== */
+        .subheader {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: clamp(9px, 1.5vw, 13px);
+            color: rgba(0,255,0,0.04);
+            letter-spacing: 2px;
+            padding: 2px 0 5px 0;
+            border-bottom: 1px solid rgba(0,255,0,0.015);
+            margin-bottom: 6px;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .subheader .prompt { color: rgba(0,255,0,0.08); }
+        .subheader .cursor-blink { animation: blink-cursor 1s step-end infinite; }
+        @keyframes blink-cursor { 0%,100% { opacity:1; } 50% { opacity:0; } }
+
+        /* ===== INPUT ===== */
+        .input-line {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(0,255,0,0.01);
+            border: 1px solid rgba(0,255,0,0.02);
+            border-radius: 8px;
+            padding: 2px 4px 2px 10px;
+            margin-bottom: 4px;
+            transition: border-color 0.4s;
+            flex-shrink: 0;
+        }
+        .input-line:focus-within { border-color: rgba(0,255,0,0.04); }
+        .input-line .prompt-symbol { color: rgba(0,255,0,0.04); font-size: clamp(14px, 2vw, 20px); user-select: none; }
+        .input-line input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: clamp(16px, 3vw, 24px);
+            color: #00ff00;
+            padding: 6px 4px;
+            letter-spacing: 3px;
+            min-width: 40px;
+        }
+        .input-line input::placeholder { color: rgba(0,255,0,0.02); font-size: clamp(12px, 1.5vw, 16px); }
+        .input-line .btn-execute {
+            background: linear-gradient(135deg, #00cc44, #00aa33);
+            border: none;
+            border-radius: 6px;
+            padding: 6px 18px;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: clamp(10px, 1.5vw, 14px);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #0a0a0a;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        .input-line .btn-execute:hover { transform: scale(1.02); background: linear-gradient(135deg, #00dd55, #00bb44); }
+        .input-line .btn-execute:active { transform: scale(0.94); }
+        .input-line .btn-execute:disabled { opacity: 0.15; cursor: not-allowed; transform: none !important; }
+
+        /* ===== LOADER ===== */
+        .loader {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 2px 0 2px 10px;
+            color: rgba(0,255,0,0.06);
+            font-size: clamp(10px, 1.5vw, 14px);
+            letter-spacing: 2px;
+            flex-shrink: 0;
+        }
+        .loader.active { display: flex; }
+        .loader .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(0,255,0,0.015);
+            border-top: 2px solid #00ff00;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== ERROR ===== */
+        .error-box {
+            background: rgba(255,68,102,0.015);
+            border: 1px solid rgba(255,68,102,0.025);
+            border-radius: 6px;
+            padding: 5px 10px;
+            color: #ff6688;
+            font-size: clamp(10px, 1.5vw, 14px);
+            display: none;
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+        .error-box.active { display: block; animation: fadeSlide 0.3s ease; }
+        @keyframes fadeSlide { 0% { opacity:0; transform:translateY(6px); } 100% { opacity:1; transform:translateY(0); } }
+        .error-box .retry-btn {
+            background: rgba(255,68,102,0.03);
+            border: 1px solid rgba(255,68,102,0.03);
+            border-radius: 4px;
+            padding: 2px 10px;
+            color: #ff6688;
+            cursor: pointer;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: clamp(9px, 1.2vw, 12px);
+            margin-left: 6px;
+            transition: all 0.2s;
+        }
+        .error-box .retry-btn:hover { background: rgba(255,68,102,0.06); border-color: rgba(255,68,102,0.06); }
+
+        /* ===== OUTPUT - FULL SCREEN ===== */
+        .output-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            margin-top: 4px;
+            border-top: 1px solid rgba(0,255,0,0.015);
+            padding-top: 4px;
+        }
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 3px;
+            padding-bottom: 2px;
+            border-bottom: 1px solid rgba(0,255,0,0.01);
+            flex-shrink: 0;
+        }
+        .output-header .label {
+            font-size: clamp(8px, 1.2vw, 12px);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(0,255,0,0.025);
+        }
+        .output-header .label .blink-arrow { animation: blink-arrow 1s infinite; }
+        @keyframes blink-arrow { 0%,100% { opacity:1; } 50% { opacity:0.02; } }
+        .output-header .copy-btn {
+            background: rgba(0,255,0,0.01);
+            border: 1px solid rgba(0,255,0,0.012);
+            border-radius: 4px;
+            padding: 2px 10px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: clamp(8px, 1.2vw, 12px);
+            color: rgba(0,255,0,0.04);
+            cursor: pointer;
+            transition: all 0.3s;
+            letter-spacing: 2px;
+        }
+        .output-header .copy-btn:hover { background: rgba(0,255,0,0.012); border-color: rgba(0,255,0,0.025); color: #00ff00; }
+        .output-header .copy-btn.copied { border-color: #00ff00; color: #00ff00; background: rgba(0,255,0,0.012); }
+
+        /* ===== TYPING CONTAINER ===== */
+        .typing-container {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: clamp(14px, 2.5vw, 22px);
+            line-height: 2.0;
+            color: #70ff70;
+            white-space: pre-wrap;
+            word-break: break-word;
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 2px;
+            scroll-behavior: smooth;
+            min-height: 80px;
+        }
+        .typing-container::-webkit-scrollbar { width: 3px; }
+        .typing-container::-webkit-scrollbar-thumb { background: rgba(0,255,0,0.015); border-radius: 10px; }
+        .typing-container .cursor {
+            display: inline-block;
+            width: 10px;
+            height: clamp(18px, 3vw, 28px);
+            background: #00ff00;
+            animation: blink-cursor 0.8s step-end infinite;
+            vertical-align: text-bottom;
+            margin-left: 2px;
+            box-shadow: 0 0 30px #00ff00;
+        }
+        .typing-container .line { display: block; }
+        .typing-container .highlight {
+            color: #00ff00;
+            font-weight: bold;
+            text-shadow: 0 0 40px rgba(0,255,0,0.03);
+        }
+        .typing-container .label-key {
+            color: rgba(0,255,0,0.04);
+            font-size: clamp(10px, 1.5vw, 16px);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            display: inline-block;
+            min-width: 80px;
+        }
+        .typing-container .separator { color: rgba(0,255,0,0.01); }
+
+        .typing-container .welcome-text {
+            font-size: clamp(24px, 6vw, 60px);
+            font-family: 'Orbitron', sans-serif;
+            text-align: center;
+            padding: 18px 0;
+            background: linear-gradient(135deg, #00ff00, #00cc44, #00ff00);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: welcome-glow 3s infinite;
+            letter-spacing: 6px;
+            line-height: 1.4;
+        }
+        @keyframes welcome-glow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        .typing-container .hacking-text {
+            color: #00ff00;
+            font-weight: bold;
+            text-align: center;
+            font-size: clamp(20px, 5vw, 50px);
+            padding: 14px 0;
+            animation: hack-pulse 1s infinite;
+            letter-spacing: 6px;
+            text-shadow: 0 0 60px rgba(0,255,0,0.02);
+        }
+        @keyframes hack-pulse { 0% { opacity:0.2; } 50% { opacity:1; } 100% { opacity:0.2; } }
+
+        .typing-container .hacked-text {
+            color: #00ff00;
+            font-weight: bold;
+            text-align: center;
+            font-size: clamp(24px, 6vw, 60px);
+            padding: 8px 0 14px 0;
+            text-shadow: 0 0 80px rgba(0,255,0,0.03), 0 0 120px rgba(0,255,0,0.015);
+            animation: glitch-hack 0.2s infinite alternate;
+            letter-spacing: 8px;
+        }
+        @keyframes glitch-hack { 0% { transform: translateX(-3px); opacity:0.9; } 100% { transform: translateX(3px); opacity:1; } }
+
+        /* ===== PROCESS LIST ===== */
+        .process-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            padding: 3px 0;
+            font-size: clamp(11px, 1.8vw, 18px);
+            color: rgba(0,255,0,0.08);
+            font-family: 'Share Tech Mono', monospace;
+            flex-shrink: 0;
+        }
+        .process-list .proc-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px 10px;
+            padding: 1px 2px;
+            border-bottom: 1px solid rgba(0,255,0,0.004);
+        }
+        .process-list .proc-row .pid { color: rgba(0,255,0,0.06); min-width: 40px; }
+        .process-list .proc-row .name { color: rgba(0,255,0,0.08); min-width: 100px; }
+        .process-list .proc-row .status {
+            color: rgba(0,255,0,0.12);
+            min-width: 50px;
+        }
+        .process-list .proc-row .status.running { color: #00ff00; }
+        .process-list .proc-row .status.idle { color: rgba(0,255,0,0.08); }
+        .process-list .proc-row .vmiss { color: rgba(0,255,0,0.06); min-width: 60px; }
+        .process-list .proc-header {
+            color: rgba(0,255,0,0.015);
+            font-size: clamp(9px, 1.2vw, 14px);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-bottom: 1px solid rgba(0,255,0,0.01);
+            padding-bottom: 2px;
+            margin-bottom: 2px;
+        }
+        .process-list .console-line {
+            color: rgba(0,255,0,0.02);
+            font-size: clamp(10px, 1.5vw, 16px);
+            padding: 3px 0 1px 0;
+            letter-spacing: 1px;
+        }
+
+        /* ===== HACKER KEYBOARD ===== */
+        .hacker-keyboard {
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px solid rgba(0,255,0,0.01);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 2px;
+            max-width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            flex-shrink: 0;
+        }
+        .hacker-keyboard .key {
+            background: rgba(0,255,0,0.012);
+            border: 1px solid rgba(0,255,0,0.025);
+            border-radius: 3px;
+            padding: 3px 6px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: clamp(10px, 1.5vw, 16px);
+            color: rgba(0,255,0,0.10);
+            cursor: pointer;
+            transition: all 0.15s;
+            min-width: 20px;
+            text-align: center;
+            user-select: none;
+            letter-spacing: 1px;
+        }
+        .hacker-keyboard .key:hover {
+            background: rgba(0,255,0,0.03);
+            border-color: rgba(0,255,0,0.05);
+            color: #00ff00;
+            box-shadow: 0 0 20px rgba(0,255,0,0.015);
+        }
+        .hacker-keyboard .key:active {
+            transform: scale(0.92);
+            background: rgba(0,255,0,0.04);
+            box-shadow: 0 0 30px rgba(0,255,0,0.025);
+        }
+        .hacker-keyboard .key.space { min-width: 50px; flex: 1; }
+        .hacker-keyboard .key.special { color: rgba(0,255,0,0.02); border-color: rgba(0,255,0,0.008); }
+        .hacker-keyboard .key.special:hover { color: rgba(0,255,0,0.06); border-color: rgba(0,255,0,0.015); }
+        .hacker-keyboard .key.active-key {
+            background: rgba(0,255,0,0.04);
+            border-color: rgba(0,255,0,0.06);
+            color: #00ff00;
+            box-shadow: 0 0 30px rgba(0,255,0,0.015);
+        }
+
+        /* ===== BOTTOM BAR ===== */
+        .bottom-bar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 4px;
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px solid rgba(0,255,0,0.008);
+            flex-shrink: 0;
+        }
+        .bottom-bar .badge {
+            font-size: clamp(7px, 1vw, 11px);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: rgba(0,255,0,0.012);
+            padding: 2px 10px;
+            border: 1px solid rgba(0,255,0,0.006);
+            border-radius: 30px;
+            background: rgba(0,255,0,0.002);
+        }
+        .bottom-bar .badge strong { color: rgba(0,255,0,0.02); font-weight: normal; }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 600px) {
+            .terminal { padding: 6px 8px 8px; }
+            .header .brand { font-size: clamp(12px, 3.5vw, 18px); letter-spacing: 2px; }
+            .sys-status { font-size: clamp(7px, 1.2vw, 10px); gap: 2px 8px; }
+            .subheader { font-size: clamp(7px, 1.2vw, 10px); }
+            .input-line input { font-size: clamp(14px, 4vw, 20px); padding: 4px 4px; }
+            .input-line .btn-execute { padding: 4px 12px; font-size: clamp(8px, 1.5vw, 12px); }
+            .typing-container { font-size: clamp(11px, 2.5vw, 16px); line-height: 1.8; }
+            .typing-container .label-key { min-width: 50px; font-size: clamp(8px, 1.2vw, 12px); }
+            .typing-container .welcome-text { font-size: clamp(16px, 5vw, 30px); padding: 10px 0; }
+            .typing-container .hacking-text { font-size: clamp(14px, 4vw, 28px); }
+            .typing-container .hacked-text { font-size: clamp(16px, 5vw, 32px); }
+            .process-list { font-size: clamp(9px, 1.5vw, 13px); }
+            .process-list .proc-row .name { min-width: 60px; }
+            .hacker-keyboard .key { padding: 2px 4px; font-size: clamp(8px, 1.2vw, 12px); min-width: 14px; }
+            .hacker-keyboard .key.space { min-width: 25px; }
+            .bottom-bar .badge { font-size: clamp(6px, 0.8vw, 9px); padding: 1px 6px; letter-spacing: 1px; }
+        }
+        @media (max-width: 400px) {
+            .terminal { padding: 3px 4px 4px; }
+            .header .brand { font-size: clamp(10px, 3vw, 14px); }
+            .input-line input { font-size: clamp(12px, 3.5vw, 16px); padding: 3px 2px; }
+            .input-line .btn-execute { padding: 3px 8px; font-size: clamp(7px, 1.2vw, 10px); }
+            .typing-container { font-size: clamp(9px, 2vw, 13px); }
+            .typing-container .welcome-text { font-size: clamp(12px, 4vw, 22px); }
+            .hacker-keyboard .key { padding: 2px 3px; font-size: clamp(7px, 1vw, 10px); min-width: 10px; }
+            .hacker-keyboard .key.space { min-width: 16px; }
+            .process-list { font-size: clamp(7px, 1.2vw, 10px); }
+            .process-list .proc-row .name { min-width: 40px; }
+            .process-list .proc-row .pid { min-width: 25px; }
+            .process-list .proc-row .vmiss { min-width: 35px; }
+            .process-list .proc-row .status { min-width: 30px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== RAIN CANVAS ===== -->
+    <canvas id="rain-canvas"></canvas>
+
+    <!-- ===== OVERLAYS ===== -->
+    <div class="scanline"></div>
+    <div class="glitch-overlay"></div>
+    <div class="crt-flicker"></div>
+
+    <!-- ===== TERMINAL - FULL SCREEN ===== -->
+    <div class="terminal" id="terminal">
+
+        <!-- HEADER -->
+        <div class="header">
+            <span class="brand">⏣ SAIF·OSINT</span>
+            <span class="status"><span class="dot"></span> ROOT · v3.0</span>
+        </div>
+
+        <!-- SYSTEM STATUS -->
+        <div class="sys-status" id="sysStatus">
+            <span class="item">BAT [<strong>11111111</strong>]</span>
+            <span class="item">MEM [<strong>111</strong>]</span>
+            <span class="item">ROM [<strong>111</strong>]</span>
+            <span class="item">WIFI [<strong>OFF</strong>]</span>
+        </div>
+
+        <!-- SUBHEADER -->
+        <div class="subheader">
+            <span class="prompt">$</span>
+            <span style="color:rgba(0,255,0,0.02);">[</span>
+            <span style="color:rgba(0,255,0,0.025);">NUMBER·INTELLIGENCE</span>
+            <span style="color:rgba(0,255,0,0.02);">]</span>
+            <span style="color:rgba(0,255,0,0.004);">──</span>
+            <span style="color:rgba(0,255,0,0.004);">#root</span>
+            <span class="cursor-blink">█</span>
+        </div>
+
+        <!-- INPUT -->
+        <div class="input-line">
+            <span class="prompt-symbol">▸</span>
+            <input type="text" id="numberInput" placeholder="9661756498" value="9661756498" autofocus spellcheck="false" autocomplete="off" />
+            <button class="btn-execute" id="searchBtn">⟳ EXEC</button>
+        </div>
+
+        <!-- LOADER -->
+        <div class="loader" id="loader">
+            <div class="spinner"></div>
+            <span>decrypting payload</span>
+        </div>
+
+        <!-- ERROR -->
+        <div class="error-box" id="errorMsg">
+            ⚠️ <span id="errorText">Invalid number.</span>
+            <button class="retry-btn" id="retryBtn">↻ RETRY</button>
+        </div>
+
+        <!-- OUTPUT - FULL SCREEN -->
+        <div class="output-area">
+            <div class="output-header">
+                <span class="label"><span class="blink-arrow">▸</span> RESPONSE</span>
+                <button class="copy-btn" id="copyBtn">⎘ COPY</button>
+            </div>
+
+            <!-- TYPING CONTAINER -->
+            <div class="typing-container" id="typingContainer">
+                <div class="welcome-text" id="welcomeMsg">
+                    ═══ WELCOME TO SAIF OSINT ═══
+                </div>
+            </div>
+
+            <!-- PROCESS LIST -->
+            <div class="process-list" id="processList">
+                <div class="proc-header">
+                    <span style="min-width:40px;display:inline-block;">PID</span>
+                    <span style="min-width:100px;display:inline-block;">NAME</span>
+                    <span style="min-width:50px;display:inline-block;">STATUS</span>
+                    <span style="min-width:60px;display:inline-block;">VmRSS</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">3102</span>
+                    <span class="name">android.system</span>
+                    <span class="status running">R (running)</span>
+                    <span class="vmiss">408426</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">2801</span>
+                    <span class="name">android.phone</span>
+                    <span class="status idle">I (idle)</span>
+                    <span class="vmiss">387996</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">3011</span>
+                    <span class="name">system.wifi</span>
+                    <span class="status idle">I (idle)</span>
+                    <span class="vmiss">418494</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">3801</span>
+                    <span class="name">aris.monitor</span>
+                    <span class="status running">R (running)</span>
+                    <span class="vmiss">762193</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">1903</span>
+                    <span class="name">system.bat</span>
+                    <span class="status running">R (running)</span>
+                    <span class="vmiss">354555</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">2340</span>
+                    <span class="name">user.cache</span>
+                    <span class="status idle">I (idle)</span>
+                    <span class="vmiss">108382</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">1034</span>
+                    <span class="name">android.int</span>
+                    <span class="status running">R (running)</span>
+                    <span class="vmiss">527156</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">2089</span>
+                    <span class="name">sys.data</span>
+                    <span class="status running">R (running)</span>
+                    <span class="vmiss">797707</span>
+                </div>
+                <div class="proc-row">
+                    <span class="pid">2301</span>
+                    <span class="name">svs.usr</span>
+                    <span class="status idle">I (idle)</span>
+                    <span class="vmiss">556493</span>
+                </div>
+                <div class="console-line">console</div>
+                <div class="console-line" style="color:rgba(0,255,0,0.015);">Initializing quantum encryption...</div>
+                <div class="console-line" style="color:rgba(0,255,0,0.015);">Access granted.</div>
+                <div class="console-line" style="color:rgba(0,255,0,0.015);">Running decryption algorithm...</div>
+                <div class="console-line" style="color:rgba(0,255,0,0.015);">Initializing completed.</div>
+                <div class="console-line" style="color:rgba(0,255,0,0.01);">SAIF OSINT Console version 2.0.0-h</div>
+            </div>
+        </div>
+
+        <!-- HACKER KEYBOARD -->
+        <div class="hacker-keyboard" id="hackerKeyboard">
+            <div class="key" data-value="1">1</div>
+            <div class="key" data-value="2">2</div>
+            <div class="key" data-value="3">3</div>
+            <div class="key" data-value="4">4</div>
+            <div class="key" data-value="5">5</div>
+            <div class="key" data-value="6">6</div>
+            <div class="key" data-value="7">7</div>
+            <div class="key" data-value="8">8</div>
+            <div class="key" data-value="9">9</div>
+            <div class="key" data-value="0">0</div>
+            <div class="key" data-value="q">q</div>
+            <div class="key" data-value="w">w</div>
+            <div class="key" data-value="e">e</div>
+            <div class="key" data-value="r">r</div>
+            <div class="key" data-value="t">t</div>
+            <div class="key" data-value="y">y</div>
+            <div class="key" data-value="u">u</div>
+            <div class="key" data-value="i">i</div>
+            <div class="key" data-value="o">o</div>
+            <div class="key" data-value="p">p</div>
+            <div class="key" data-value="a">a</div>
+            <div class="key" data-value="s">s</div>
+            <div class="key" data-value="d">d</div>
+            <div class="key" data-value="f">f</div>
+            <div class="key" data-value="g">g</div>
+            <div class="key" data-value="h">h</div>
+            <div class="key" data-value="j">j</div>
+            <div class="key" data-value="k">k</div>
+            <div class="key" data-value="l">l</div>
+            <div class="key" data-value="z">z</div>
+            <div class="key" data-value="x">x</div>
+            <div class="key" data-value="c">c</div>
+            <div class="key" data-value="v">v</div>
+            <div class="key" data-value="b">b</div>
+            <div class="key" data-value="n">n</div>
+            <div class="key" data-value="m">m</div>
+            <div class="key special" data-value="backspace">⌫</div>
+            <div class="key space" data-value=" ">␣</div>
+            <div class="key special" data-value="clear">✕</div>
+        </div>
+
+        <!-- BOTTOM BAR -->
+        <div class="bottom-bar">
+            <span class="badge">⚡ <strong>@saifali883883</strong></span>
+            <span class="badge">🔒 <strong>SAIF OSINT</strong></span>
+            <span class="badge">📡 <strong>ROOT</strong></span>
+        </div>
+
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // ---- DOM ----
+            const input = document.getElementById('numberInput');
+            const searchBtn = document.getElementById('searchBtn');
+            const loader = document.getElementById('loader');
+            const errorMsg = document.getElementById('errorMsg');
+            const errorText = document.getElementById('errorText');
+            const retryBtn = document.getElementById('retryBtn');
+            const typingContainer = document.getElementById('typingContainer');
+            const copyBtn = document.getElementById('copyBtn');
+            const terminal = document.getElementById('terminal');
+            const keyboard = document.getElementById('hackerKeyboard');
+
+            // ---- state ----
+            let lastData = null;
+            let isTyping = false;
+            let typingAbort = false;
+            let keyPressTimeout = null;
+
+            // ---- REAL API ----
+            const API_BASE = 'https://movements-invoice-amanda-victoria.trycloudflare.com/search/number';
+            const API_KEY = 'mysecretkey123';
+            const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
+
+            // ---- BACKUP DEMO ----
+            function getBackupData(number) {
+                const demos = {
+                    "9661756498": { status:"success", result: { num:"9661756498", name:"Saroj Devi", fname:"Dharmendra Yadav", aadhar:"374785977880", circle:"AIRTEL BHR&JHR", address:"Vill Mahuajhor, Kastha, Gaya, Bihar 824209", email:null, alt:null } },
+                    "8294938603": { status:"success", result: { num:"8294938603", name:"Rahul Kumar", fname:"Suresh Singh", aadhar:"456789123456", circle:"JIO BHR", address:"Patna, Bihar 800001", email:"rahul@email.com", alt:"9876543210" } },
+                    "7858894812": { status:"success", result: { num:"7858894812", name:"Priya Sharma", fname:"Rajesh Sharma", aadhar:"987654321098", circle:"VODAFONE", address:"Delhi, India 110001", email:"priya@email.com", alt:"8765432109" } }
+                };
+                if (demos[number]) return demos[number];
+                return { status:"success", result: { num:number, name:"User Not Found", fname:"—", aadhar:"—", circle:"—", address:"No records found for this number", email:"—", alt:"—" } };
+            }
+
+            // ---- helpers ----
+            function formatNumber(raw) {
+                let d = raw.replace(/\D/g,'');
+                if (d.startsWith('91') && d.length>10) d = d.slice(2);
+                if (d.length>10) d = d.slice(-10);
+                return d;
+            }
+            function isValidNumber(n) { return /^[0-9]{10}$/.test(n); }
+            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+            // ---- fetch ----
+            async function fetchWithCorsFallback(url) {
+                try {
+                    const r = await fetch(url, { method:'GET', headers:{'Accept':'application/json'} });
+                    if (r.ok) return r;
+                } catch(e) { console.log('Direct fetch failed, trying CORS proxy...'); }
+                const proxyUrl = CORS_PROXY + encodeURIComponent(url);
+                return await fetch(proxyUrl);
+            }
+
+            // ---- typewriter ----
+            async function typeText(lines, container, totalDuration = 15000) {
+                if (isTyping) return;
+                isTyping = true;
+                typingAbort = false;
+                container.innerHTML = '';
+                const full = lines.join('\n');
+                const chars = full.split('');
+                const total = chars.length;
+                const delay = Math.max(4, totalDuration / total);
+                let current = '';
+                let idx = 0;
+                const cursor = document.createElement('span');
+                cursor.className = 'cursor';
+                container.appendChild(cursor);
+                while (idx < chars.length) {
+                    if (typingAbort) break;
+                    current += chars[idx];
+                    idx++;
+                    const node = document.createTextNode(current);
+                    container.innerHTML = '';
+                    container.appendChild(node);
+                    container.appendChild(cursor);
+                    container.scrollTop = container.scrollHeight;
+                    terminal.scrollTop = terminal.scrollHeight;
+                    let d = delay;
+                    if (chars[idx-1] === '\n') d = delay * 1.6;
+                    else if (chars[idx-1] === ' ' || chars[idx-1] === '\t') d = delay * 0.4;
+                    else if (chars[idx-1] === ',' || chars[idx-1] === '.' || chars[idx-1] === ':' || chars[idx-1] === ';') d = delay * 1.3;
+                    else if (chars[idx-1] === '─') d = delay * 0.3;
+                    await sleep(Math.min(d, 80));
+                }
+                container.innerHTML = renderStyled(lines);
+                isTyping = false;
+            }
+
+            function renderStyled(lines) {
+                let html = '';
+                for (let line of lines) {
+                    const match = line.match(/^(.+?)\s*:\s*(.+)$/);
+                    if (match) {
+                        const label = match[1].trim();
+                        const value = match[2].trim();
+                        const isHighlight = label.toLowerCase() === 'number';
+                        const cls = isHighlight ? 'highlight' : '';
+                        html += `<span class="line"><span class="label-key">${label}</span><span class="separator"> : </span><span class="${cls}">${value}</span></span>`;
+                    } else {
+                        html += `<span class="line">${line}</span>`;
+                    }
+                }
+                return html;
+            }
+
+            function formatDataForDisplay(data) {
+                const lines = [];
+                let items = [];
+                if (Array.isArray(data.result)) items = data.result;
+                else if (data.result && typeof data.result === 'object') items = [data.result];
+                else items = [];
+                if (items.length === 0) {
+                    lines.push('⚠️  NO RECORDS FOUND');
+                    lines.push('└── target number not in database');
+                    return lines;
+                }
+                const total = items.length;
+                lines.push(`📡  INTELLIGENCE REPORT  —  ${total} record(s) found`);
+                lines.push('');
+                items.forEach((item, idx) => {
+                    if (idx > 0) lines.push('───');
+                    lines.push(`  [${idx + 1}/${total}]`);
+                    lines.push(`  Number      : ${item.num || '—'}`);
+                    lines.push(`  Name        : ${item.name || '—'}`);
+                    lines.push(`  Father      : ${item.fname || '—'}`);
+                    lines.push(`  Aadhar      : ${item.aadhar || '—'}`);
+                    lines.push(`  Circle      : ${item.circle || '—'}`);
+                    lines.push(`  Address     : ${item.address || '—'}`);
+                    lines.push(`  Email       : ${item.email || '—'}`);
+                    lines.push(`  Alternate   : ${item.alt || '—'}`);
+                });
+                lines.push('');
+                lines.push('✔  EXTRACTION COMPLETE  ·  SIGNAL TERMINATED');
+                return lines;
+            }
+
+            async function showHackingProcess(container) {
+                container.innerHTML = `<div class="hacking-text">▸ HACKING IN PROCESS... ▸</div>`;
+                await sleep(2000);
+            }
+
+            async function showSystemHacked(container) {
+                container.innerHTML = `<div class="hacked-text">⚠ SYSTEM HACKED ⚠</div>`;
+                await sleep(1200);
+            }
+
+            // ---- main ----
+            async function performLookup() {
+                const raw = input.value.trim();
+                const clean = formatNumber(raw);
+                if (!isValidNumber(clean)) {
+                    input.style.borderColor = 'rgba(255,68,102,0.06)';
+                    errorText.textContent = '❌ Invalid · must be 10 digits';
+                    errorMsg.classList.add('active');
+                    typingContainer.innerHTML = `<div class="welcome-text">═══ WELCOME TO SAIF OSINT ═══</div>`;
+                    return;
+                }
+                input.style.borderColor = '';
+                errorMsg.classList.remove('active');
+
+                const url = `${API_BASE}?number=${clean}&key=${API_KEY}`;
+                loader.classList.add('active');
+                searchBtn.disabled = true;
+                typingAbort = true;
+                await sleep(50);
+                typingAbort = false;
+
+                try {
+                    await showHackingProcess(typingContainer);
+
+                    let data = null;
+                    let apiSuccess = false;
+
+                    try {
+                        const response = await fetchWithCorsFallback(url);
+                        if (response.ok) {
+                            const json = await response.json();
+                            if (json.status === 'success') {
+                                data = json;
+                                apiSuccess = true;
+                            }
+                        }
+                    } catch (e) { console.log('API failed:', e); }
+
+                    if (!apiSuccess) {
+                        data = getBackupData(clean);
+                        errorText.textContent = '⚠️ API unreachable · showing cached data';
+                        errorMsg.classList.add('active');
+                        setTimeout(() => errorMsg.classList.remove('active'), 3000);
+                    } else {
+                        errorMsg.classList.remove('active');
+                    }
+
+                    lastData = data;
+                    await showSystemHacked(typingContainer);
+                    const lines = formatDataForDisplay(data);
+                    await typeText(lines, typingContainer, 15000);
+
+                } catch (err) {
+                    errorText.textContent = err.message || 'Network error';
+                    errorMsg.classList.add('active');
+                    typingContainer.innerHTML = `<div class="welcome-text">═══ WELCOME TO SAIF OSINT ═══</div>`;
+                } finally {
+                    loader.classList.remove('active');
+                    searchBtn.disabled = false;
+                }
+            }
+
+            // ---- copy ----
+            function copyData() {
+                if (!lastData) {
+                    copyBtn.textContent = '⛔ NO DATA';
+                    setTimeout(() => copyBtn.textContent = '⎘ COPY', 1400);
+                    return;
+                }
+                const json = JSON.stringify(lastData, null, 2);
+                navigator.clipboard.writeText(json).then(() => {
+                    copyBtn.textContent = '✓ COPIED!';
+                    copyBtn.classList.add('copied');
+                    setTimeout(() => {
+                        copyBtn.textContent = '⎘ COPY';
+                        copyBtn.classList.remove('copied');
+                    }, 2400);
+                }).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = json;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    ta.remove();
+                    copyBtn.textContent = '✓ COPIED!';
+                    setTimeout(() => copyBtn.textContent = '⎘ COPY', 2000);
+                });
+            }
+
+            // ---- RAIN EFFECT - FULL SCREEN WATER RAIN ----
+            function initRain() {
+                const canvas = document.getElementById('rain-canvas');
+                const ctx = canvas.getContext('2d');
+                let w, h;
+
+                function resize() {
+                    w = canvas.width = window.innerWidth;
+                    h = canvas.height = window.innerHeight;
+                }
+                window.addEventListener('resize', resize);
+                resize();
+
+                // Rain drops
+                const drops = [];
+                const MAX_DROPS = 300;
+
+                class RainDrop {
+                    constructor() {
+                        this.reset();
+                    }
+                    reset() {
+                        this.x = Math.random() * w;
+                        this.y = Math.random() * h - h;
+                        this.length = 6 + Math.random() * 18;
+                        this.speed = 4 + Math.random() * 12;
+                        this.opacity = 0.15 + Math.random() * 0.45;
+                        this.width = 0.5 + Math.random() * 2;
+                        this.slant = 0.3 + Math.random() * 0.4;
+                        this.bright = Math.random() > 0.8;
+                    }
+                    update() {
+                        this.y += this.speed;
+                        this.x += this.speed * this.slant * 0.15;
+                        if (this.y > h) {
+                            this.reset();
+                            this.y = -this.length;
+                        }
+                        if (this.x > w) { this.x = 0; }
+                        if (this.x < 0) { this.x = w; }
+                    }
+                    draw(ctx) {
+                        const alpha = this.bright ? this.opacity * 1.5 : this.opacity;
+                        const color = this.bright ? '#00ff00' : '#00cc44';
+                        const gradient = ctx.createLinearGradient(
+                            this.x, this.y,
+                            this.x + this.speed * this.slant * 0.15, this.y + this.length
+                        );
+                        gradient.addColorStop(0, `rgba(0, 255, 0, ${alpha * 0.1})`);
+                        gradient.addColorStop(0.3, `rgba(0, 255, 0, ${alpha * 0.6})`);
+                        gradient.addColorStop(0.7, `rgba(0, 255, 0, ${alpha * 0.8})`);
+                        gradient.addColorStop(1, `rgba(0, 255, 0, ${alpha * 0.9})`);
+
+                        ctx.beginPath();
+                        ctx.moveTo(this.x, this.y);
+                        ctx.lineTo(this.x + this.speed * this.slant * 0.15, this.y + this.length);
+                        ctx.strokeStyle = gradient;
+                        ctx.lineWidth = this.width;
+                        ctx.shadowColor = `rgba(0, 255, 0, ${alpha * 0.1})`;
+                        ctx.shadowBlur = this.bright ? 8 : 2;
+                        ctx.stroke();
+                        ctx.shadowBlur = 0;
+                    }
+                }
+
+                for (let i = 0; i < MAX_DROPS; i++) {
+                    drops.push(new RainDrop());
+                }
+
+                // Splash particles at bottom
+                const splashes = [];
+
+                function draw() {
+                    ctx.clearRect(0, 0, w, h);
+
+                    // Draw rain drops
+                    for (const drop of drops) {
+                        drop.update();
+                        drop.draw(ctx);
+                    }
+
+                    // Occasional splash effect
+                    if (Math.random() > 0.98) {
+                        const x = Math.random() * w;
+                        const y = h - 5;
+                        for (let i = 0; i < 5; i++) {
+                            splashes.push({
+                                x: x + (Math.random() - 0.5) * 10,
+                                y: y,
+                                vx: (Math.random() - 0.5) * 2,
+                                vy: -1 - Math.random() * 3,
+                                life: 20 + Math.random() * 20,
+                                maxLife: 40,
+                                size: 1 + Math.random() * 2
+                            });
+                        }
+                    }
+
+                    // Draw splashes
+                    for (let i = splashes.length - 1; i >= 0; i--) {
+                        const s = splashes[i];
+                        s.x += s.vx;
+                        s.y += s.vy;
+                        s.vy += 0.05;
+                        s.life--;
+                        const alpha = s.life / s.maxLife;
+                        ctx.beginPath();
+                        ctx.arc(s.x, s.y, s.size * alpha, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(0, 255, 0, ${alpha * 0.2})`;
+                        ctx.fill();
+                        if (s.life <= 0) {
+                            splashes.splice(i, 1);
+                        }
+                    }
+
+                    // Very subtle glow at bottom
+                    const bottomGrad = ctx.createLinearGradient(0, h - 60, 0, h);
+                    bottomGrad.addColorStop(0, 'rgba(0, 255, 0, 0)');
+                    bottomGrad.addColorStop(1, 'rgba(0, 255, 0, 0.02)');
+                    ctx.fillStyle = bottomGrad;
+                    ctx.fillRect(0, h - 60, w, 60);
+
+                    requestAnimationFrame(draw);
+                }
+
+                draw();
+            }
+
+            // ---- keyboard ----
+            function setupKeyboard() {
+                const keys = keyboard.querySelectorAll('.key');
+                keys.forEach(key => {
+                    key.addEventListener('click', function(e) {
+                        const value = this.dataset.value;
+                        const inputField = input;
+                        const start = inputField.selectionStart;
+                        const end = inputField.selectionEnd;
+
+                        this.classList.add('active-key');
+                        clearTimeout(keyPressTimeout);
+                        keyPressTimeout = setTimeout(() => {
+                            this.classList.remove('active-key');
+                        }, 150);
+
+                        if (value === 'backspace') {
+                            if (start > 0) {
+                                const newVal = inputField.value.slice(0, start - 1) + inputField.value.slice(end);
+                                inputField.value = newVal;
+                                inputField.selectionStart = inputField.selectionEnd = start - 1;
+                            }
+                        } else if (value === 'clear') {
+                            inputField.value = '';
+                            inputField.focus();
+                        } else if (value === ' ') {
+                            const newVal = inputField.value.slice(0, start) + ' ' + inputField.value.slice(end);
+                            inputField.value = newVal;
+                            inputField.selectionStart = inputField.selectionEnd = start + 1;
+                        } else {
+                            const newVal = inputField.value.slice(0, start) + value + inputField.value.slice(end);
+                            inputField.value = newVal;
+                            inputField.selectionStart = inputField.selectionEnd = start + value.length;
+                        }
+                        inputField.focus();
+                        inputField.dispatchEvent(new Event('input', { bubbles: true }));
+                    });
+                });
+
+                document.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        performLookup();
+                    }
+                });
+            }
+
+            // ---- events ----
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault();
+                    performLookup(); }
+                if (e.key === 'Escape') {
+                    input.blur();
+                    input.style.borderColor = '';
+                    errorMsg.classList.remove('active');
+                    typingContainer.innerHTML = `<div class="welcome-text">═══ WELCOME TO SAIF OSINT ═══</div>`;
+                }
+            });
+            input.addEventListener('focus', () => {
+                input.style.borderColor = '';
+                errorMsg.classList.remove('active');
+            });
+            searchBtn.addEventListener('click', performLookup);
+            retryBtn.addEventListener('click', performLookup);
+            copyBtn.addEventListener('click', copyData);
+
+            // ---- init ----
+            window.addEventListener('DOMContentLoaded', () => {
+                initRain();
+                setupKeyboard();
+                typingContainer.innerHTML = `<div class="welcome-text">═══ WELCOME TO SAIF OSINT ═══</div>`;
+            });
+
+        })();
+    </script>
+
+</body>
+</html>
